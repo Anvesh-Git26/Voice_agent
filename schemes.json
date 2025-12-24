@@ -1,0 +1,85 @@
+[
+  {
+    "scheme_id": "RYTHU_BANDHU",
+    "scheme_name_te": "రైతు బంధు పథకం",
+    "description_te": "రైతులకు పెట్టుబడి సాయం అందించేందుకు తెలంగాణ ప్రభుత్వం ప్రవేశపెట్టిన పథకం. విత్తనాలు, ఎరువులు, పురుగుమందుల కోసం ఆర్థిక సాయం.",
+    "category": "Agriculture",
+    "eligibility_criteria": {
+      "min_age": 18,
+      "max_age": 100,
+      "occupation": ["farmer", "agricultural_laborer"],
+      "income_cap_rupees": null,
+      "land_ownership_required": true,
+      "state_residency": "Telangana"
+    },
+    "benefits": "ఎకరానికి రూ. 5000 చొప్పున, రెండు పంటలకు కలిపి రూ. 10000.",
+    "documents_required": ["Pattadar Passbook", "Aadhaar Card", "Bank Passbook"]
+  },
+  {
+    "scheme_id": "AASARA_PENSION",
+    "scheme_name_te": "ఆసరా పెన్షన్",
+    "description_te": "వృద్ధులు, వితంతువులు, మరియు వికలాంగులకు సామాజిక భద్రత కల్పించే పెన్షన్ పథకం.",
+    "category": "Welfare",
+    "eligibility_criteria": {
+      "min_age": 57,
+      "max_age": 100,
+      "occupation": ["any"],
+      "income_cap_rupees": 200000,
+      "land_ownership_required": false,
+      "state_residency": "Telangana"
+    },
+    "benefits": "నెలకు రూ. 2016 (వృద్ధులకు/వితంతువులకు), రూ. 3016 (వికలాంగులకు).",
+    "documents_required": ["Aadhaar Card", "Age Proof", "Income Certificate"]
+  },
+  {
+    "scheme_id": "KALYANA_LAKSHMI",
+    "scheme_name_te": "కల్యాణ లక్ష్మి",
+    "description_te": "పేద కుటుంబాలలోని ఆడపిల్లల వివాహం కోసం ఆర్థిక సహాయం అందించే పథకం.",
+    "category": "Welfare",
+    "eligibility_criteria": {
+      "min_age": 18,
+      "max_age": 35,
+      "occupation": ["any"],
+      "income_cap_rupees": 200000,
+      "land_ownership_required": false,
+      "state_residency": "Telangana",
+      "gender": "female",
+      "marital_status": "unmarried"
+    },
+    "benefits": "వివాహ సమయంలో రూ. 1,00,116 ఆర్థిక సాయం.",
+    "documents_required": ["Aadhaar Card", "Birth Certificate", "Income Certificate", "Wedding Card"]
+  },
+  {
+    "scheme_id": "AROGYASRI",
+    "scheme_name_te": "ఆరోగ్యశ్రీ",
+    "description_te": "పేదలకు ఉచిత వైద్య చికిత్స అందించే ఆరోగ్య బీమా పథకం.",
+    "category": "Health",
+    "eligibility_criteria": {
+      "min_age": 0,
+      "max_age": 100,
+      "occupation": ["any"],
+      "income_cap_rupees": 500000,
+      "land_ownership_required": false,
+      "state_residency": "Telangana"
+    },
+    "benefits": "రూ. 5 లక్షల నుండి 10 లక్షల వరకు ఉచిత వైద్యం.",
+    "documents_required": ["White Ration Card", "Aadhaar Card"]
+  },
+  {
+    "scheme_id": "DALIT_BANDHU",
+    "scheme_name_te": "దళిత బంధు",
+    "description_te": "దళిత కుటుంబాల ఆర్థికాభివృద్ధి కోసం ప్రవేశపెట్టిన పథకం. స్వయం ఉపాధి కల్పన దీని ముఖ్య ఉద్దేశం.",
+    "category": "Welfare",
+    "eligibility_criteria": {
+      "min_age": 18,
+      "max_age": 60,
+      "occupation": ["any"],
+      "income_cap_rupees": null,
+      "land_ownership_required": false,
+      "state_residency": "Telangana",
+      "caste": "SC"
+    },
+    "benefits": "కుటుంబానికి రూ. 10 లక్షల ఆర్థిక సాయం (తిరిగి చెల్లించాల్సిన అవసరం లేదు).",
+    "documents_required": ["Aadhaar Card", "Caste Certificate", "Bank Account"]
+  }
+]
