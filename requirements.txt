@@ -1,0 +1,11 @@
+langchain-google-genai
+langgraph
+langchain
+langchain-core
+transformers
+accelerate
+bitsandbytes
+chromadb
+sentence-transformers
+SpeechRecognition
+gtts
