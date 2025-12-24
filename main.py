@@ -25,8 +25,8 @@ from chromadb.utils import embedding_functions
 # PART 1: SETUP & CONFIGURATION
 # ==========================================
 
-
-GOOGLE_API_KEY = 'Enter your api here'
+mandatory_fields = ['occupation','age','region','income']
+GOOGLE_API_KEY = 'Enter_your_api'
 
 # 2. INTELLIGENT MODEL (Cloud - Gemini)
 print("☁️  Initializing Cloud Model (Gemini)...")
@@ -41,42 +41,6 @@ except Exception as e:
     print(f"❌ Cloud Model Init Failed: {e}")
     llm_cloud = None
 
-# 3. FAST MODEL (Local - Hugging Face on T4 GPU)
-LOCAL_MODEL_ID = "google/gemma-2-9b-it" 
-print(f"🔄 Loading Local GPU Model: {LOCAL_MODEL_ID}...")
-
-try:
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.float16,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-    )
-
-    tokenizer = AutoTokenizer.from_pretrained(LOCAL_MODEL_ID)
-    model = AutoModelForCausalLM.from_pretrained(
-        LOCAL_MODEL_ID,
-        quantization_config=bnb_config,
-        device_map="auto",
-        trust_remote_code=True
-    )
-
-    pipe = pipeline(
-        "text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=256,
-        temperature=0.1,
-        return_full_text=False
-    )
-
-    llm_local = HuggingFacePipeline(pipeline=pipe)
-    print("✅ Local GPU Model Loaded Successfully!")
-
-except Exception as e:
-    print(f"⚠️ Failed to load local model on GPU. Error: {e}")
-    print("⚠️ Falling back to Cloud Model for extraction.")
-    llm_local = llm_cloud
 
 # 4. Initialize ChromaDB & LOAD JSON DATA
 print("💾 Initializing Knowledge Base...")
@@ -223,37 +187,42 @@ def speak_audio(text):
 class AgentState(TypedDict):
     messages: List[BaseMessage]
     profile: Dict[str, str]
+    is_confirmed: bool     # <--- New Flag: Has user confirmed the profile?
     next_step: str
     final_response: str
 
 def info_extractor_node(state: AgentState):
-    """Extracts profile info using the Local/Cloud LLM."""
+    """Extracts profile info AND detects confirmation intent."""
     messages = state['messages']
     current_profile = state.get('profile', {}) or {}
+    # Use existing confirmation state, default to False
+    is_confirmed = state.get('is_confirmed', False) 
+    
     last_user_input = messages[-1].content if messages else ""
     
     if not last_user_input:
-        return {"profile": current_profile}
+        return {"profile": current_profile, "is_confirmed": is_confirmed}
 
-    # Updated Prompt to capture more fields relevant to your JSON (caste, gender)
+    # Updated Prompt: Detect Data AND Intent (Confirm/Update)
     system_prompt = f"""<start_of_turn>user
-You are a data extraction assistant. Extract details from text into JSON.
-Translate Telugu terms to English.
-Fields: 'age', 'occupation', 'region', 'caste', 'income', 'gender', 'marital_status'.
+Extract user details into JSON and detect intent.
+Fields: 'age', 'occupation', 'region', 'income'.
+Intent: 'user_intent' should be 'confirm' if user says "Yes/Correct/Avunu", or 'update' if providing data.
 
 Rules:
 1. Return ONLY valid JSON.
 2. If a value is missing, do not include the key.
+3. Translate Telugu terms to English.
 
 Examples:
-Input: "Naa vayasu 40 nenu raithu"
-Output: {{ "age": "40", "occupation": "farmer" }}
+Input: "Naa vayasu 35"
+Output: {{ "age": "35", "user_intent": "update" }}
 
-Input: "Nenu SC kulam"
-Output: {{ "caste": "SC" }}
+Input: "Avunu adi correct"
+Output: {{ "user_intent": "confirm" }}
 
-Input: "Nenu pelli kani ammayini"
-Output: {{ "gender": "female", "marital_status": "unmarried" }}
+Input: "Kaadu, naa vayasu 25"
+Output: {{ "age": "25", "user_intent": "update" }}
 
 Task:
 Current Profile: {json.dumps(current_profile)}
@@ -273,59 +242,94 @@ User Input: "{last_user_input}"
             
         extracted_data = json.loads(clean_json)
         updated_profile = current_profile.copy()
+        
+        data_changed = False
+        
+        # 1. Update Profile Fields
         for k, v in extracted_data.items():
+            if k == "user_intent": continue
+            
             if v and str(v).lower() not in ["unknown", "none", "null"]:
-                updated_profile[k] = v
-        print(f"DEBUG (Extractor): {extracted_data}")
+                # If value is different, update it
+                if k not in updated_profile or updated_profile[k] != str(v):
+                    updated_profile[k] = str(v)
+                    data_changed = True
+
+        # 2. Logic for Confirmation Status
+        intent = extracted_data.get("user_intent", "update")
+        
+        if data_changed:
+            # If data changed (contradiction/correction), we must re-confirm
+            is_confirmed = False
+            print("DEBUG: Data changed. Resetting confirmation.")
+        elif intent == "confirm":
+            # Only set confirmed if explicitly stated AND no data change
+            is_confirmed = True
+            print("DEBUG: User confirmed details.")
+            
+        print(f"DEBUG (Extractor): Data={extracted_data}, Confirmed={is_confirmed}")
+        
     except Exception as e:
         print(f"Extraction Error: {e}")
         updated_profile = current_profile
 
-    return {"profile": updated_profile}
+    return {"profile": updated_profile, "is_confirmed": is_confirmed}
 
 def decision_node(state: AgentState):
     profile = state.get('profile', {})
-    # Mandatory fields before we allow a search
-    mandatory_fields = ['occupation', 'age', 'region']
+    is_confirmed = state.get('is_confirmed', False)
+    
+    
     missing = [field for field in mandatory_fields if field not in profile or not profile[field]]
-    return {"next_step": "ask" if missing else "search"}
+    
+    if missing:
+        return {"next_step": "ask"}
+    elif not is_confirmed:
+        return {"next_step": "confirm"} # <--- New step: Ask for confirmation
+    else:
+        return {"next_step": "search"}
 
 def question_generator_node(state: AgentState):
+    """Asks for missing information."""
     profile = state.get('profile', {})
-    missing_fields = [k for k in ['occupation', 'age', 'region'] if k not in profile]
-    prompt = f"You are a helpful assistant. Current Profile: {profile}. Missing: {missing_fields}. Ask ONE polite question in TELUGU to get missing info. Just only give telugu response not telugu in english"
+    missing_fields = [k for k in mandatory_fields if k not in profile]
+    prompt = f"You are a helpful assistant. Current Profile: {profile}. Missing: {missing_fields}. Ask ONE polite question in TELUGU to get missing info from the user. NOTE: Donot go out of context just ask exactly what fields are missing"
+    response = llm_cloud.invoke([HumanMessage(content=prompt)])
+    return {"final_response": response.content}
+
+def confirmation_generator_node(state: AgentState):
+    """Asks user to confirm the collected profile."""
+    profile = state.get('profile', {})
+    prompt = f"""
+    You are a helpful assistant.
+    Current User Profile: {profile}
+    
+    Task: Summarize the user's details (Age, Occupation, Region, etc.) in TELUGU.
+    Then, ask the user if these details are correct.
+    Example: "Meeru Rythu, vayasu 35, Warangal lo untunnaru. Idi sarainadena?"
+    """
     response = llm_cloud.invoke([HumanMessage(content=prompt)])
     return {"final_response": response.content}
 
 def scheme_search_node(state: AgentState):
     profile = state['profile']
-    # Create a query that targets the 'Eligibility' section of your JSON docs
-    query_text = f"scheme for {profile.get('occupation', '')} {profile.get('age', '')} years old {profile.get('gender', '')} {profile.get('caste', '')}"
+    query_text = f"scheme for {profile.get('occupation', '')} {profile.get('age', '')} years old"
     print(f"DEBUG: RAG Query -> {query_text}")
     
-    # Retrieve top 3 matches
     results = collection.query(query_texts=[query_text], n_results=3)
-    
     docs = results['documents'][0] if results['documents'] else []
     
     if not docs:
         context = "No specific schemes found."
-        print("DEBUG: No documents returned.")
     else:
         context = "\n\n".join([f"- {d}" for d in docs])
-        print(f"DEBUG: Retrieved Context:\n{context}")
     
     prompt = f"""
     User Profile: {profile}
+    Matched Schemes: {context}
     
-    Matched Schemes from Database:
-    {context}
-    
-    Task: Explain the matched schemes in TELUGU. 
-    Focus on WHY they are eligible (e.g., "Because you are a farmer...") and keep it short and just brief.
-    If the database content says 'No specific schemes', apologize politely in Telugu that I am not able to currently get schemes for your profile.
-    
-    IMPORTANT: Provide the output in PLAIN TEXT. Do NOT use bold (**), italics, or markdown symbols (asterisks).
+    Task: Explain the matched schemes in TELUGU (Plain text, no markdown). 
+    Focus on eligibility.
     """
     response = llm_cloud.invoke([HumanMessage(content=prompt)])
     return {"final_response": response.content}
@@ -338,13 +342,26 @@ workflow = StateGraph(AgentState)
 workflow.add_node("extractor", info_extractor_node)
 workflow.add_node("decider", decision_node)
 workflow.add_node("asker", question_generator_node)
+workflow.add_node("confirmer", confirmation_generator_node) # <--- Added Node
 workflow.add_node("searcher", scheme_search_node)
 workflow.add_node("speaker", output_node)
 
 workflow.set_entry_point("extractor")
 workflow.add_edge("extractor", "decider")
-workflow.add_conditional_edges("decider", lambda x: x["next_step"], {"ask": "asker", "search": "searcher"})
+
+# Updated Conditional Logic
+workflow.add_conditional_edges(
+    "decider", 
+    lambda x: x["next_step"], 
+    {
+        "ask": "asker",
+        "confirm": "confirmer",
+        "search": "searcher"
+    }
+)
+
 workflow.add_edge("asker", "speaker")
+workflow.add_edge("confirmer", "speaker")
 workflow.add_edge("searcher", "speaker")
 workflow.add_edge("speaker", END)
 
@@ -360,6 +377,7 @@ def run_interactive_session():
     
     messages = []
     user_profile = {} 
+    user_confirmed = False # Track confirmation state across turns
     
     while True:
         try:
@@ -386,6 +404,7 @@ def run_interactive_session():
             state = {
                 "messages": messages, 
                 "profile": user_profile, 
+                "is_confirmed": user_confirmed, # Pass persistent state
                 "next_step": "decider"
             }
             
@@ -394,6 +413,7 @@ def run_interactive_session():
             # 4. Update State & Speak
             messages = result['messages']
             user_profile = result.get('profile', user_profile)
+            user_confirmed = result.get('is_confirmed', False) # Update persistent state
             
             last_response = messages[-1].content
             speak_audio(last_response)
