@@ -26,7 +26,7 @@ from chromadb.utils import embedding_functions
 # ==========================================
 
 
-GOOGLE_API_KEY = 'Enter your API key'
+GOOGLE_API_KEY = 'Enter your api here'
 
 # 2. INTELLIGENT MODEL (Cloud - Gemini)
 print("☁️  Initializing Cloud Model (Gemini)...")
@@ -51,7 +51,7 @@ try:
         bnb_4bit_compute_dtype=torch.float16,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_use_double_quant=True,
-    )e
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(LOCAL_MODEL_ID)
     model = AutoModelForCausalLM.from_pretrained(
