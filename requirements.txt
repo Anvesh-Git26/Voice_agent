@@ -1,11 +1,9 @@
-langchain-google-genai
-langgraph
 langchain
+langchain-groq
+langgraph
 langchain-core
-transformers
-accelerate
-bitsandbytes
 chromadb
-sentence-transformers
 SpeechRecognition
-gtts
+gTTS
+sentence-transformers
+numpy
